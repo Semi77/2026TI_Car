@@ -36,24 +36,24 @@ void Motor_Control(int16_t speedA,int16_t speedB)
     //右轮
 	if (speedB > 0)
 	{
-		DL_GPIO_setPins(MOTOR_AIN_PORT, MOTOR_BIN_MOTOR_BIN1_PIN);
-        DL_GPIO_clearPins(MOTOR_AIN_PORT, MOTOR_BIN_MOTOR_BIN2_PIN);
+		DL_GPIO_setPins(MOTOR_BIN_PORT, MOTOR_BIN_MOTOR_BIN1_PIN);
+        DL_GPIO_clearPins(MOTOR_BIN_PORT, MOTOR_BIN_MOTOR_BIN2_PIN);
 	}
 	else if (speedB < 0)
 	{
 		speedB = -speedB;
-        DL_GPIO_clearPins(MOTOR_AIN_PORT, MOTOR_BIN_MOTOR_BIN1_PIN);
-		DL_GPIO_setPins(MOTOR_AIN_PORT, MOTOR_BIN_MOTOR_BIN2_PIN);
+        DL_GPIO_clearPins(MOTOR_BIN_PORT, MOTOR_BIN_MOTOR_BIN1_PIN);
+		DL_GPIO_setPins(MOTOR_BIN_PORT, MOTOR_BIN_MOTOR_BIN2_PIN);
 	}
 	else 
     {
-        DL_GPIO_clearPins(MOTOR_AIN_PORT, MOTOR_BIN_MOTOR_BIN1_PIN);
-		DL_GPIO_clearPins(MOTOR_AIN_PORT, MOTOR_BIN_MOTOR_BIN2_PIN);
+        DL_GPIO_clearPins(MOTOR_BIN_PORT, MOTOR_BIN_MOTOR_BIN1_PIN);
+		DL_GPIO_clearPins(MOTOR_BIN_PORT, MOTOR_BIN_MOTOR_BIN2_PIN);
     }
     
 	//改变占空比输出 [0, 1000]
-    DL_TimerG_setCaptureCompareValue(PWM_MOTOR_INST, speedA, DL_TIMER_CC_0_INDEX);    //这个2000是PWM周期
-    DL_TimerG_setCaptureCompareValue(PWM_MOTOR_INST, speedB, DL_TIMER_CC_1_INDEX);
+    DL_TimerA_setCaptureCompareValue(PWM_MOTOR_INST, speedA, DL_TIMER_CC_0_INDEX);
+    DL_TimerA_setCaptureCompareValue(PWM_MOTOR_INST, speedB, DL_TIMER_CC_1_INDEX);
 }
 
 void Motor_Stop(void)
@@ -61,6 +61,6 @@ void Motor_Stop(void)
 	DL_GPIO_clearPins(MOTOR_AIN_PORT, MOTOR_AIN_MOTOR_AIN1_PIN);
 	DL_GPIO_clearPins(MOTOR_AIN_PORT, MOTOR_AIN_MOTOR_AIN2_PIN);
 	
-	DL_GPIO_clearPins(MOTOR_AIN_PORT, MOTOR_BIN_MOTOR_BIN1_PIN);
-	DL_GPIO_clearPins(MOTOR_AIN_PORT, MOTOR_BIN_MOTOR_BIN2_PIN);
+	DL_GPIO_clearPins(MOTOR_BIN_PORT, MOTOR_BIN_MOTOR_BIN1_PIN);
+	DL_GPIO_clearPins(MOTOR_BIN_PORT, MOTOR_BIN_MOTOR_BIN2_PIN);
 }

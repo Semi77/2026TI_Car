@@ -1,4 +1,30 @@
 #include "ti_msp_dl_config.h"
+#include "test.h"
+
+#ifndef TEST_MODE
+#define TEST_MODE TEST_MODE_MOTOR
+#endif
+
+#if TEST_MODE == TEST_MODE_OLED
+int main(void)
+{
+    SYSCFG_DL_init();
+    Test_OLED_Run();
+
+    while (1) {
+    }
+}
+#elif TEST_MODE == TEST_MODE_MOTOR
+int main(void)
+{
+    SYSCFG_DL_init();
+    Test_Motor_Run();
+
+    while (1) {
+    }
+}
+#else
+#include "ti_msp_dl_config.h"
 #include "motor.h"
 #include "oled_hardware_i2c.h"
 #include "mpu6050.h"
@@ -82,7 +108,7 @@ int main(void)
     PID_Init(&gyro_pid, 1.5f, 0, 0.8f,100.0f, -100.0f);
     PID_Init(&gray_pid, 30.0f, 0, 0.8f, 50, -50);
     //定时器和中断使能
-    DL_TimerG_startCounter(PWM_MOTOR_INST);
+    DL_TimerA_startCounter(PWM_MOTOR_INST);
     DL_TimerA_startCounter(CONTROL_TIMER_INST);
     NVIC_ClearPendingIRQ(CONTROL_TIMER_INST_INT_IRQN);
     NVIC_EnableIRQ(CONTROL_TIMER_INST_INT_IRQN);
@@ -297,4 +323,4 @@ int main(void)
 //         }                
 //     }
 // }
-
+#endif
