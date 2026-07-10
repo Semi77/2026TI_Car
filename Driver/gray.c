@@ -1,25 +1,7 @@
 #include "gray.h"
-#include "ti_msp_dl_config.h"
+#include "No_Mcu_Ganv_Grayscale_Sensor_Config.h"
 
-static void Gray_Set_Address_Pin(uint32_t pin, uint8_t state)
-{
-    if (state != 0U) {
-        DL_GPIO_setPins(Gray_Address_PORT, pin);
-    } else {
-        DL_GPIO_clearPins(Gray_Address_PORT, pin);
-    }
-}
-
-static uint8_t Gray_Read_Channel(uint8_t channel)
-{
-    Gray_Set_Address_Pin(Gray_Address_AD0_PIN, (channel >> 0U) & 0x01U);
-    Gray_Set_Address_Pin(Gray_Address_AD1_PIN, (channel >> 1U) & 0x01U);
-    Gray_Set_Address_Pin(Gray_Address_AD2_PIN, (channel >> 2U) & 0x01U);
-
-    DL_Common_delayCycles((CPUCLK_FREQ / 1000000U) * 40U);
-
-    return (DL_GPIO_readPins(Gray_OUT_PORT, Gray_OUT_OUT_PIN) != 0U) ? 1U : 0U;
-}
+void Get_Analog_value(unsigned short *result);
 
 float Gray_Test(void)
 {
@@ -27,11 +9,33 @@ float Gray_Test(void)
         -4.0f, -3.0f, -2.0f, -1.0f,
          1.0f,  2.0f,  3.0f,  4.0f
     };
+    unsigned short adc_value[8];
+    unsigned short min_value;
+    unsigned short max_value;
+    unsigned short threshold;
     uint8_t sensor_sum = 0U;
     float weight_sum = 0.0f;
 
+    Get_Analog_value(adc_value);
+
+    min_value = adc_value[0];
+    max_value = adc_value[0];
+    for (uint8_t channel = 1U; channel < 8U; channel++) {
+        if (adc_value[channel] < min_value) {
+            min_value = adc_value[channel];
+        }
+        if (adc_value[channel] > max_value) {
+            max_value = adc_value[channel];
+        }
+    }
+
+    if ((max_value - min_value) < 20U) {
+        return 100.0f;
+    }
+
+    threshold = (unsigned short)((min_value + max_value) / 2U);
     for (uint8_t channel = 0U; channel < 8U; channel++) {
-        if (Gray_Read_Channel(channel) != 0U) {
+        if (adc_value[channel] < threshold) {
             weight_sum += weights[channel];
             sensor_sum++;
         }

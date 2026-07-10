@@ -3,6 +3,7 @@
 #include "motor.h"
 #include "oled_hardware_i2c.h"
 #include "ti_msp_dl_config.h"
+#include "uart.h"
 
 #include <stdint.h>
 
@@ -21,8 +22,8 @@ static void Test_Motor_Step(int16_t left_speed, int16_t right_speed)
 
 void Test_OLED_Run(void)
 {
-    OLED_Init();
-    OLED_Clear();
+    // OLED_Init();
+    // OLED_Clear();
     OLED_ShowString(0, 0, (uint8_t *)"OLED TEST", 16);
     OLED_ShowString(0, 2, (uint8_t *)"MSPM0G3507", 16);
 }
@@ -41,5 +42,19 @@ void Test_Motor_Run(void)
         Test_Motor_Step(-MOTOR_TEST_SPEED, -MOTOR_TEST_SPEED);
 
         Test_DelayMs(MOTOR_CYCLE_PAUSE_MS);
+    }
+}
+
+void Test_UART_Run(void)
+{
+    uint32_t count = 0U;
+
+    UART_Printf("UART test start\r\n");
+
+    while (1) {
+        UART_Printf("UART TEST %lu: 0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ\r\n",
+            (unsigned long)count);
+        count++;
+        Test_DelayMs(UART_TEST_PERIOD_MS);
     }
 }
