@@ -1,0 +1,23 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "timx_timer_mode_periodic_sleep",
+            "type": "ccs-debug",
+            "request": "launch",
+            "projectInfo": {
+                "name": "timx_timer_mode_periodic_sleep",
+                "resourceId": "/timx_timer_mode_periodic_sleep"
+            }
+        },
+        {
+            "name": "timx_timer_mode_periodic_sleep (1)",
+            "type": "ccs-debug",
+            "request": "launch",
+            "projectInfo": {
+                "name": "timx_timer_mode_periodic_sleep",
+                "resourceId": "/timx_timer_mode_periodic_sleep/__ccs_3_compilerIncludes"
+            }
+        }
+    ]
+}
