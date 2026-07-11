@@ -53,7 +53,12 @@ void Motor_Control(int16_t speedA,int16_t speedB)
     
 	//改变占空比输出 [0, 1000]
     DL_TimerA_setCaptureCompareValue(PWM_MOTOR_INST, speedA, DL_TIMER_CC_0_INDEX);
-    DL_TimerA_setCaptureCompareValue(PWM_MOTOR_INST, speedB, DL_TIMER_CC_1_INDEX);
+	DL_TimerA_setCaptureCompareValue(PWM_MOTOR_INST, speedB, DL_TIMER_CC_1_INDEX);
+}
+
+void Motor_Forward(int16_t speed)
+{
+    Motor_Control(-speed, speed);
 }
 
 void Motor_Stop(void)

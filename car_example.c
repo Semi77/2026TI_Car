@@ -2,12 +2,14 @@
 #include "oled_hardware_i2c.h"
 #include "mpu6050.h"
 #include "No_Mcu_Ganv_Grayscale_Sensor_Config.h"
+#include "motor.h"
 
 #include <stdint.h>
 
 #define OLED_FONT_8              8U
 #define SENSOR_UPDATE_PERIOD_MS  10U
 #define OLED_REFRESH_PERIOD_MS   100U
+#define MOTOR_FORWARD_SPEED      400
 
 static volatile uint8_t g_10ms_flag = 0U;
 static volatile uint32_t g_10ms_ticks = 0U;
@@ -141,6 +143,8 @@ int main(void)
             g_gray_digital = Get_Digtal_For_User(&g_gray_sensor);
             (void)Get_Anolog_Value(&g_gray_sensor, g_gray_analog);
             (void)Get_Normalize_For_User(&g_gray_sensor, g_gray_normal);
+
+            Motor_Forward(MOTOR_FORWARD_SPEED);
 
             if ((g_10ms_ticks - last_oled_tick) >=
                 (OLED_REFRESH_PERIOD_MS / SENSOR_UPDATE_PERIOD_MS)) {
