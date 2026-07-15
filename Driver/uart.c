@@ -7,8 +7,8 @@
 
 static void UART_SendByte(uint8_t data)
 {
-    while(DL_UART_isTXFIFOFull(UART_0_INST));
-    DL_UART_transmitData(UART_0_INST, data);
+    while(DL_UART_isTXFIFOFull(UART_TEST_INST));
+    DL_UART_transmitData(UART_TEST_INST, data);
 }
 
 static void UART_SendString(const char s[])

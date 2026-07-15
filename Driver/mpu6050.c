@@ -6,7 +6,7 @@
 
 /* -------- I2C 地址(AD0=0) -------- */
 #define MPU_ADDR        0x68
-#define Scale           1.13f
+#define Scale           1.7f
 /* -------- 全局变量 -------- */
 float g_Gyro_X_Offset = 0.0f;
 float g_Gyro_Y_Offset = 0.0f;

@@ -33,5 +33,9 @@ void OLED_ShowChinese(uint8_t x,uint8_t y,uint8_t no,uint8_t sizey);
 void OLED_DrawBMP(uint8_t x,uint8_t y,uint8_t sizex, uint8_t sizey,uint8_t BMP[]);
 void OLED_Init(void);
 void oled_i2c_sda_unlock(void);
+void OLED_DrawSensorLabels(void);
+void OLED_UpdateSensorValues(int32_t yaw, int32_t gyro_z,
+    uint8_t gray_digital, const char *state,
+    const unsigned short gray_normal[8]);
 
 #endif /* #ifndef __OLED_HARDWARE_I2C_H */

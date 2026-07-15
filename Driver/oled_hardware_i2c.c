@@ -3,6 +3,7 @@
 #include "ti_msp_dl_config.h"
 
 #define I2C_TIMEOUT_MS  (10)
+#define OLED_FONT_8     8U
 
 //OLED的显存
 //存放格式如下.
@@ -246,6 +247,67 @@ void OLED_ShowString(uint8_t x,uint8_t y,uint8_t *chr,uint8_t sizey)
 }
 
 //显示汉字
+static void OLED_ShowSignedNum(uint8_t x, uint8_t y, int32_t value, uint8_t len)
+{
+    if (value < 0) {
+        OLED_ShowChar(x, y, '-', OLED_FONT_8);
+        value = -value;
+    } else {
+        OLED_ShowChar(x, y, '+', OLED_FONT_8);
+    }
+
+    OLED_ShowNum((uint8_t)(x + 6U), y, (uint32_t)value, len, OLED_FONT_8);
+}
+
+static void OLED_ClearField(uint8_t x, uint8_t y, uint8_t chars)
+{
+    for (uint8_t i = 0U; i < chars; i++) {
+        OLED_ShowChar((uint8_t)(x + i * 6U), y, ' ', OLED_FONT_8);
+    }
+}
+
+static void OLED_ShowDigitalByte(uint8_t x, uint8_t y, uint8_t value)
+{
+    for (uint8_t i = 0U; i < 8U; i++) {
+        uint8_t bit = (value >> i) & 0x01U;
+        OLED_ShowChar((uint8_t)(x + i * 6U), y, (uint8_t)('0' + bit), OLED_FONT_8);
+    }
+}
+
+void OLED_DrawSensorLabels(void)
+{
+    OLED_ShowString(0, 0, (uint8_t *)"Y:", OLED_FONT_8);
+    OLED_ShowString(60, 0, (uint8_t *)"GZ:", OLED_FONT_8);
+    OLED_ShowString(0, 1, (uint8_t *)"D:", OLED_FONT_8);
+    OLED_ShowString(0, 2, (uint8_t *)"STATE:", OLED_FONT_8);
+
+    OLED_ShowString(0, 6, (uint8_t *)"N0:", OLED_FONT_8);
+    OLED_ShowString(60, 6, (uint8_t *)"N7:", OLED_FONT_8);
+}
+
+void OLED_UpdateSensorValues(int32_t yaw, int32_t gyro_z,
+    uint8_t gray_digital, const char *state,
+    const unsigned short gray_normal[8])
+{
+    OLED_ClearField(12, 0, 4);
+    OLED_ShowSignedNum(12, 0, yaw, 3);
+
+    OLED_ClearField(78, 0, 4);
+    OLED_ShowSignedNum(78, 0, gyro_z, 3);
+
+    OLED_ClearField(12, 1, 8);
+    OLED_ShowDigitalByte(12, 1, gray_digital);
+
+    OLED_ClearField(42, 2, 10);
+    OLED_ShowString(42, 2, (uint8_t *)state, OLED_FONT_8);
+
+    OLED_ClearField(18, 6, 4);
+    OLED_ShowNum(18, 6, gray_normal[0], 4, OLED_FONT_8);
+
+    OLED_ClearField(78, 6, 4);
+    OLED_ShowNum(78, 6, gray_normal[7], 4, OLED_FONT_8);
+}
+
 void OLED_ShowChinese(uint8_t x,uint8_t y,uint8_t no,uint8_t sizey)
 {
     uint16_t i,size1=(sizey/8+((sizey%8)?1:0))*sizey;
