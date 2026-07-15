@@ -1,11 +1,60 @@
 #include "test.h"
 
+#include "bluetooth_uart.h"
 #include "motor.h"
 #include "oled_hardware_i2c.h"
+#include "st7735s.h"
 #include "ti_msp_dl_config.h"
 #include "uart.h"
 
 #include <stdint.h>
+
+#define BLUETOOTH_OLED_FONT_SIZE       (8U)
+#define BLUETOOTH_OLED_CHAR_WIDTH      (6U)
+#define BLUETOOTH_OLED_COLUMNS         (21U)
+#define BLUETOOTH_OLED_ROWS            (8U)
+#define BLUETOOTH_OLED_READ_SIZE       (32U)
+#define ST7735S_COLOR_HOLD_MS           (1000U)
+
+static uint8_t s_bluetooth_oled_column;
+static uint8_t s_bluetooth_oled_row;
+static uint8_t s_st7735s_color_index;
+
+static void Test_BluetoothOLED_NewLine(void)
+{
+    s_bluetooth_oled_column = 0U;
+    s_bluetooth_oled_row++;
+
+    if (s_bluetooth_oled_row >= BLUETOOTH_OLED_ROWS) {
+        OLED_Clear();
+        s_bluetooth_oled_row = 0U;
+    }
+}
+
+static void Test_BluetoothOLED_ShowByte(uint8_t data)
+{
+    if (data == (uint8_t)'\r') {
+        return;
+    }
+
+    if (data == (uint8_t)'\n') {
+        Test_BluetoothOLED_NewLine();
+        return;
+    }
+
+    if ((data < (uint8_t)' ') || (data > (uint8_t)'~')) {
+        data = (uint8_t)'?';
+    }
+
+    OLED_ShowChar(
+        (uint8_t)(s_bluetooth_oled_column * BLUETOOTH_OLED_CHAR_WIDTH),
+        s_bluetooth_oled_row, data, BLUETOOTH_OLED_FONT_SIZE);
+
+    s_bluetooth_oled_column++;
+    if (s_bluetooth_oled_column >= BLUETOOTH_OLED_COLUMNS) {
+        Test_BluetoothOLED_NewLine();
+    }
+}
 
 static void Test_DelayMs(uint32_t ms)
 {
@@ -56,5 +105,74 @@ void Test_UART_Run(void)
             (unsigned long)count);
         count++;
         Test_DelayMs(UART_TEST_PERIOD_MS);
+    }
+}
+
+void Test_BluetoothOLED_Init(void)
+{
+    Bluetooth_UART_Init();
+    OLED_Init();
+
+    s_bluetooth_oled_column = 0U;
+    s_bluetooth_oled_row = 1U;
+    OLED_ShowString(0U, 0U, (uint8_t *)"BT OLED READY", 8U);
+    Bluetooth_UART_SendString("BT OLED READY\r\n");
+}
+
+void Test_BluetoothOLED_Process(void)
+{
+    uint8_t data[BLUETOOTH_OLED_READ_SIZE];
+    uint16_t length;
+    uint16_t index;
+
+    length = Bluetooth_UART_Read(data, sizeof(data));
+    for (index = 0U; index < length; index++) {
+        Test_BluetoothOLED_ShowByte(data[index]);
+    }
+}
+
+/* 该函数初始化ST7735S为128乘160竖屏并准备从红色开始循环。 */
+bool Test_ST7735S_ColorCycleInit(void)
+{
+    s_st7735s_color_index = 0U;
+    return ST7735S_Init(ST7735S_ROTATION_0);
+}
+
+/* 该函数按红绿蓝白顺序刷新一次全屏颜色并保持一秒。 */
+void Test_ST7735S_ColorCycleProcess(void)
+{
+    static const uint16_t colors[] = {
+        ST7735S_COLOR_RED,
+        ST7735S_COLOR_GREEN,
+        ST7735S_COLOR_BLUE,
+        ST7735S_COLOR_WHITE,
+    };
+    static const uint16_t text_colors[] = {
+        ST7735S_COLOR_WHITE,
+        ST7735S_COLOR_WHITE,
+        ST7735S_COLOR_WHITE,
+        ST7735S_COLOR_BLACK,
+    };
+    static const char *const color_names[] = {
+        "RED",
+        "GREEN",
+        "BLUE",
+        "WHITE",
+    };
+    uint16_t background = colors[s_st7735s_color_index];
+    uint16_t foreground = text_colors[s_st7735s_color_index];
+
+    (void)ST7735S_FillScreen(background);
+    (void)ST7735S_DrawString(32U, 24U, "ST7735S", foreground, background);
+    (void)ST7735S_DrawString(40U, 56U,
+        color_names[s_st7735s_color_index], foreground, background);
+    (void)ST7735S_DrawChar(32U, 88U, '#', foreground, background);
+    (void)ST7735S_DrawInteger(48U, 88U, -123, foreground, background);
+    Test_DelayMs(ST7735S_COLOR_HOLD_MS);
+
+    s_st7735s_color_index++;
+    if (s_st7735s_color_index >=
+        (uint8_t)(sizeof(colors) / sizeof(colors[0]))) {
+        s_st7735s_color_index = 0U;
     }
 }

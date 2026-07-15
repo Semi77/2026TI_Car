@@ -1,6 +1,8 @@
 #ifndef TEST_H
 #define TEST_H
 
+#include <stdbool.h>
+
 #define TEST_MODE_ORIGINAL    0U
 #define TEST_MODE_OLED        1U
 #define TEST_MODE_MOTOR       2U
@@ -18,5 +20,13 @@
 void Test_OLED_Run(void);
 void Test_Motor_Run(void);
 void Test_UART_Run(void);
+void Test_BluetoothOLED_Init(void);
+void Test_BluetoothOLED_Process(void);
+
+/* 该函数初始化ST7735S四色测试并返回初始化是否成功。 */
+bool Test_ST7735S_ColorCycleInit(void);
+
+/* 该函数按红绿蓝白顺序刷新一次全屏颜色并保持一秒。 */
+void Test_ST7735S_ColorCycleProcess(void);
 
 #endif
