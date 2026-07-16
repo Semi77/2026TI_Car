@@ -1,5 +1,6 @@
 #include "oled_hardware_i2c.h"
 #include "oledfont.h"
+#include "delay.h"
 #include "ti_msp_dl_config.h"
 
 #define I2C_TIMEOUT_MS  (10)
@@ -22,12 +23,6 @@ void mspm0_get_clock_ms(uint32_t *ms) {
     __disable_irq();
     *ms = g_ms_counter;
     __enable_irq();
-}
-
-void delay_ms(uint32_t ms)
-{
-    uint32_t cycles = ms* (CPUCLK_FREQ / 1000U);
-    DL_Common_delayCycles(cycles);
 }
 
 static int mspm0_i2c_disable(void)

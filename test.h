@@ -23,10 +23,19 @@ void Test_UART_Run(void);
 void Test_BluetoothOLED_Init(void);
 void Test_BluetoothOLED_Process(void);
 
+/* 该函数运行MaxiCam坐标接收与OLED显示测试，调用后不会返回。 */
+void Test_MaxiCamOLED_Run(void);
+
+/* 该函数运行蓝牙串口接收与OLED显示测试，调用后不会返回。 */
+void Test_BluetoothOLED_Run(void);
+
 /* 该函数初始化ST7735S四色测试并返回初始化是否成功。 */
 bool Test_ST7735S_ColorCycleInit(void);
 
 /* 该函数按红绿蓝白顺序刷新一次全屏颜色并保持一秒。 */
 void Test_ST7735S_ColorCycleProcess(void);
+
+/* 该函数运行ST7735S红绿蓝白四色循环测试，调用后不会返回。 */
+void Test_ST7735S_ColorCycleRun(void);
 
 #endif

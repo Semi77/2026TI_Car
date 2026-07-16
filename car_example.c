@@ -1,17 +1,17 @@
 /* Original vehicle control application retained for later recovery. */
 #include "ti_msp_dl_config.h"
-#include "oled_hardware_i2c.h"
+#include "Display/oled_hardware_i2c.h"
 #include "IMU.h"
 #include "imu_drdy.h"
 #include "imu_host.h"
 #include "imu_uart_port.h"
+#include "delay.h"
 #include "No_Mcu_Ganv_Grayscale_Sensor_Config.h"
 #include "motor.h"
 #include "maxicam_uart.h"
 
 #include <stdint.h>
 
-#if 0
 #define SENSOR_UPDATE_PERIOD_MS  10U
 #define OLED_REFRESH_PERIOD_MS   100U
 #define MOTOR_BASE_SPEED         400
@@ -408,72 +408,5 @@ void CONTROL_TIMER_INST_IRQHandler(void)
         g_10ms_ticks++;
         g_10ms_flag = 1U;
         IMU_HostTimerTick10ms();
-    }
-}
-#endif
-
-#if 0
-/* MaxiCam UART and OLED test retained for later use. */
-#include "ti_msp_dl_config.h"
-#include "maxicam_uart.h"
-#include "oled_hardware_i2c.h"
-#include "uart.h"
-
-int main(void)
-{
-    MaxiCam_Point point;
-
-    SYSCFG_DL_init();
-    MaxiCam_UART_Init();
-
-    OLED_Init();
-    OLED_Clear();
-    OLED_ShowString(0U, 0U, (uint8_t *)"MAXICAM DATA", 16U);
-    OLED_ShowString(0U, 2U, (uint8_t *)"X:", 16U);
-    OLED_ShowString(0U, 4U, (uint8_t *)"Y:", 16U);
-
-    while (1) {
-        MaxiCam_UART_Process();
-
-        if (MaxiCam_UART_GetLatestPoint(&point)) {
-            UART_Printf("(x:%u y:%u)\r\n",
-                (unsigned int)point.x,
-                (unsigned int)point.y);
-
-            OLED_ShowNum(24U, 2U, point.x, 4U, 16U);
-            OLED_ShowNum(24U, 4U, point.y, 4U, 16U);
-        }
-    }
-}
-#endif
-
-#include "ti_msp_dl_config.h"
-#include "test.h"
-
-#if 0
-/* 原蓝牙OLED测试主程序暂时停用，以便独立验证SPI彩屏。 */
-int main(void)
-{
-    SYSCFG_DL_init();
-    Test_BluetoothOLED_Init();
-
-    while (1) {
-        Test_BluetoothOLED_Process();
-    }
-}
-#endif
-
-/* 该主函数仅运行ST7735S红绿蓝白四色循环测试。 */
-int main(void)
-{
-    SYSCFG_DL_init();
-
-    if (!Test_ST7735S_ColorCycleInit()) {
-        while (1) {
-        }
-    }
-
-    while (1) {
-        Test_ST7735S_ColorCycleProcess();
     }
 }

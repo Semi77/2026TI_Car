@@ -1,9 +1,10 @@
 #include "test.h"
 
 #include "bluetooth_uart.h"
+#include "maxicam_uart.h"
 #include "motor.h"
-#include "oled_hardware_i2c.h"
-#include "st7735s.h"
+#include "Display/oled_hardware_i2c.h"
+#include "Display/st7735s.h"
 #include "ti_msp_dl_config.h"
 #include "uart.h"
 
@@ -131,6 +132,45 @@ void Test_BluetoothOLED_Process(void)
     }
 }
 
+/* 该函数运行MaxiCam坐标接收与OLED显示测试，调用后不会返回。 */
+void Test_MaxiCamOLED_Run(void)
+{
+    MaxiCam_Point point;
+
+    SYSCFG_DL_init();
+    MaxiCam_UART_Init();
+
+    OLED_Init();
+    OLED_Clear();
+    OLED_ShowString(0U, 0U, (uint8_t *)"MAXICAM DATA", 16U);
+    OLED_ShowString(0U, 2U, (uint8_t *)"X:", 16U);
+    OLED_ShowString(0U, 4U, (uint8_t *)"Y:", 16U);
+
+    while (1) {
+        MaxiCam_UART_Process();
+
+        if (MaxiCam_UART_GetLatestPoint(&point)) {
+            UART_Printf("(x:%u y:%u)\r\n",
+                (unsigned int)point.x,
+                (unsigned int)point.y);
+
+            OLED_ShowNum(24U, 2U, point.x, 4U, 16U);
+            OLED_ShowNum(24U, 4U, point.y, 4U, 16U);
+        }
+    }
+}
+
+/* 该函数运行蓝牙串口接收与OLED显示测试，调用后不会返回。 */
+void Test_BluetoothOLED_Run(void)
+{
+    SYSCFG_DL_init();
+    Test_BluetoothOLED_Init();
+
+    while (1) {
+        Test_BluetoothOLED_Process();
+    }
+}
+
 /* 该函数初始化ST7735S为128乘160竖屏并准备从红色开始循环。 */
 bool Test_ST7735S_ColorCycleInit(void)
 {
@@ -174,5 +214,20 @@ void Test_ST7735S_ColorCycleProcess(void)
     if (s_st7735s_color_index >=
         (uint8_t)(sizeof(colors) / sizeof(colors[0]))) {
         s_st7735s_color_index = 0U;
+    }
+}
+
+/* 该函数运行ST7735S红绿蓝白四色循环测试，调用后不会返回。 */
+void Test_ST7735S_ColorCycleRun(void)
+{
+    SYSCFG_DL_init();
+
+    if (!Test_ST7735S_ColorCycleInit()) {
+        while (1) {
+        }
+    }
+
+    while (1) {
+        Test_ST7735S_ColorCycleProcess();
     }
 }

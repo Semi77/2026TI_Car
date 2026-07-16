@@ -1,5 +1,5 @@
 #include "mpu6050.h"
-#include "oled_hardware_i2c.h"   // 里面有 delay_ms
+#include "delay.h"
 #include "ti_msp_dl_config.h"
 #include <stdint.h>
 #include <math.h>
