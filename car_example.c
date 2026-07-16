@@ -1,12 +1,17 @@
+/* 原整车控制程序暂时停用，完成超声波和彩屏联调后可删除该编译开关恢复。 */
+#if 0
 /* Original vehicle control application retained for later recovery. */
 #include "ti_msp_dl_config.h"
 #include "Display/oled_hardware_i2c.h"
+#include "Display/st7735s.h"
+#include "BSP/key_input.h"
 #include "IMU.h"
 #include "imu_drdy.h"
 #include "imu_host.h"
 #include "imu_uart_port.h"
 #include "delay.h"
 #include "No_Mcu_Ganv_Grayscale_Sensor_Config.h"
+#include "hc_sr04.h"
 #include "motor.h"
 #include "maxicam_uart.h"
 
@@ -68,6 +73,87 @@ static float g_last_gray_error = 0.0f;
 static float g_gray_integral = 0.0f;
 static float g_last_gyro_error = 0.0f;
 static float g_gyro_integral = 0.0f;
+
+/* 该函数返回无符号十进制整数在屏幕上需要显示的字符数量。 */
+static uint8_t Ultrasonic_GetDigitCount(uint32_t value)
+{
+    uint8_t count = 1U;
+
+    while (value >= 10U) {
+        value /= 10U;
+        count++;
+    }
+    return count;
+}
+
+/* 该函数初始化ST7735S上的超声波距离和状态显示区域。 */
+static void Ultrasonic_DisplayInit(void)
+{
+    (void)ST7735S_FillScreen(ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(24U, 8U, "HC-SR04",
+        ST7735S_COLOR_CYAN, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(8U, 40U, "DIST:",
+        ST7735S_COLOR_YELLOW, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(56U, 40U, "---.-cm",
+        ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(8U, 72U, "STATE:",
+        ST7735S_COLOR_YELLOW, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(64U, 72U, "WAIT",
+        ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
+}
+
+/* 该函数在ST7735S上局部刷新超声波距离和测量状态。 */
+static void Ultrasonic_DisplayUpdate(
+    uint32_t distance_mm, HC_SR04_Status status)
+{
+    uint16_t cursor_x;
+    const char *status_text;
+    uint16_t status_color;
+
+    (void)ST7735S_FillRect(56U, 40U, 72U, 16U, ST7735S_COLOR_BLACK);
+    if (status == HC_SR04_STATUS_VALID) {
+        uint32_t distance_cm = distance_mm / 10U;
+        uint32_t decimal = distance_mm % 10U;
+
+        (void)ST7735S_DrawInteger(56U, 40U, (int32_t)distance_cm,
+            ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
+        cursor_x = (uint16_t)(56U +
+            (uint16_t)Ultrasonic_GetDigitCount(distance_cm) * 8U);
+        (void)ST7735S_DrawChar(cursor_x, 40U, '.',
+            ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
+        (void)ST7735S_DrawInteger((uint16_t)(cursor_x + 8U), 40U,
+            (int32_t)decimal, ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
+        (void)ST7735S_DrawString((uint16_t)(cursor_x + 16U), 40U, "cm",
+            ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
+    } else {
+        (void)ST7735S_DrawString(56U, 40U, "---.-cm",
+            ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
+    }
+
+    switch (status) {
+    case HC_SR04_STATUS_VALID:
+        status_text = "OK";
+        status_color = ST7735S_COLOR_GREEN;
+        break;
+    case HC_SR04_STATUS_TIMEOUT:
+        status_text = "NO ECHO";
+        status_color = ST7735S_COLOR_RED;
+        break;
+    case HC_SR04_STATUS_OUT_OF_RANGE:
+        status_text = "RANGE";
+        status_color = ST7735S_COLOR_MAGENTA;
+        break;
+    case HC_SR04_STATUS_WAITING:
+    default:
+        status_text = "WAIT";
+        status_color = ST7735S_COLOR_WHITE;
+        break;
+    }
+
+    (void)ST7735S_FillRect(64U, 72U, 64U, 16U, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(64U, 72U, status_text,
+        status_color, ST7735S_COLOR_BLACK);
+}
 
     /* A轮反向、B轮正向时，两轮才是车体的同向前进。 */
 static float Gyro_WrapError(float error)
@@ -253,6 +339,9 @@ int main(void)
 {
     int imu_calibration_status;
     uint32_t last_oled_tick = 0U;
+    uint32_t ultrasonic_distance_mm = 0U;
+    HC_SR04_Status ultrasonic_status = HC_SR04_STATUS_WAITING;
+    uint8_t key_event;
 
     SYSCFG_DL_init();
 
@@ -281,9 +370,17 @@ int main(void)
     IMU_UART_Init();
     (void)IMU_HostTxInit(IMU_UART_Write);
 
+    KeyInput_Init();
+    HC_SR04_Init();
+
     OLED_Init();
     OLED_Clear();
     OLED_DrawSensorLabels();
+
+    (void)ST7735S_Init(ST7735S_ROTATION_0);
+    Ultrasonic_DisplayInit();
+    (void)ST7735S_DrawString(16U, 120U, "KEY:",
+        ST7735S_COLOR_YELLOW, ST7735S_COLOR_BLACK);
 
     DL_TimerA_startCounter(CONTROL_TIMER_INST);
     NVIC_ClearPendingIRQ(CONTROL_TIMER_INST_INT_IRQN);
@@ -295,6 +392,29 @@ int main(void)
 
         if (g_10ms_flag != 0U) {
             g_10ms_flag = 0U;
+
+            KeyInput_Process10ms();
+            HC_SR04_Process10ms();
+            (void)HC_SR04_TakeResult(
+                &ultrasonic_distance_mm, &ultrasonic_status);
+
+            key_event = KeyInput_GetPressEvent();
+            if (key_event != KEY_INPUT_NONE) {
+                (void)ST7735S_FillRect(56U, 120U, 48U, 16U,
+                    ST7735S_COLOR_BLACK);
+
+                if (key_event == KEY_INPUT_KEY1) {
+                    (void)ST7735S_DrawString(56U, 120U, "KEY1",
+                        ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
+                } else if (key_event == KEY_INPUT_KEY2) {
+                    (void)ST7735S_DrawString(56U, 120U, "KEY2",
+                        ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
+                } else if (key_event == KEY_INPUT_KEY3) {
+                    (void)ST7735S_DrawString(56U, 120U, "KEY3",
+                        ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
+                }
+            }
+
 
             No_Mcu_Ganv_Sensor_Task_Without_tick(&g_gray_sensor);
             g_gray_digital = Get_Digtal_For_User(&g_gray_sensor);
@@ -395,6 +515,8 @@ int main(void)
                     (int32_t)IMU_GetGyroZ(), g_gray_digital,
                     Car_GetStateName(g_car_state),
                     g_gray_normal);
+                Ultrasonic_DisplayUpdate(
+                    ultrasonic_distance_mm, ultrasonic_status);
             }
         }
 
@@ -408,5 +530,87 @@ void CONTROL_TIMER_INST_IRQHandler(void)
         g_10ms_ticks++;
         g_10ms_flag = 1U;
         IMU_HostTimerTick10ms();
+    }
+}
+#endif
+
+#include "ti_msp_dl_config.h"
+#include "Display/st7735s.h"
+#include "delay.h"
+#include "hc_sr04.h"
+
+#include <stdint.h>
+
+/* 该函数返回无符号十进制整数所占用的显示字符数量。 */
+static uint8_t UltrasonicTest_GetDigitCount(uint32_t value)
+{
+    uint8_t count = 1U;
+
+    while (value >= 10U) {
+        value /= 10U;
+        count++;
+    }
+    return count;
+}
+
+/* 该函数初始化ST7735S超声波测试界面并显示等待状态。 */
+static void UltrasonicTest_DisplayInit(void)
+{
+    (void)ST7735S_FillScreen(ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(16U, 24U, "HC-SR04 TEST",
+        ST7735S_COLOR_CYAN, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(8U, 64U, "DIST:",
+        ST7735S_COLOR_YELLOW, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(56U, 64U, "---.-cm",
+        ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
+}
+
+/* 该函数在ST7735S上局部刷新本次超声波测量距离。 */
+static void UltrasonicTest_DisplayDistance(
+    uint32_t distance_mm, HC_SR04_Status status)
+{
+    uint16_t cursor_x;
+
+    (void)ST7735S_FillRect(56U, 64U, 72U, 16U, ST7735S_COLOR_BLACK);
+    if (status != HC_SR04_STATUS_VALID) {
+        (void)ST7735S_DrawString(56U, 64U, "---.-cm",
+            ST7735S_COLOR_RED, ST7735S_COLOR_BLACK);
+        return;
+    }
+
+    (void)ST7735S_DrawInteger(56U, 64U, (int32_t)(distance_mm / 10U),
+        ST7735S_COLOR_GREEN, ST7735S_COLOR_BLACK);
+    cursor_x = (uint16_t)(56U +
+        (uint16_t)UltrasonicTest_GetDigitCount(distance_mm / 10U) * 8U);
+    (void)ST7735S_DrawChar(cursor_x, 64U, '.',
+        ST7735S_COLOR_GREEN, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawInteger((uint16_t)(cursor_x + 8U), 64U,
+        (int32_t)(distance_mm % 10U),
+        ST7735S_COLOR_GREEN, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString((uint16_t)(cursor_x + 16U), 64U, "cm",
+        ST7735S_COLOR_GREEN, ST7735S_COLOR_BLACK);
+}
+
+/* 该函数初始化板级外设、HC-SR04和彩屏后持续测距并刷新距离。 */
+int main(void)
+{
+    uint32_t distance_mm = 0U;
+    HC_SR04_Status status = HC_SR04_STATUS_WAITING;
+
+    SYSCFG_DL_init();
+    HC_SR04_Init();
+
+    if (!ST7735S_Init(ST7735S_ROTATION_0)) {
+        while (1) {
+        }
+    }
+    UltrasonicTest_DisplayInit();
+
+    while (1) {
+        HC_SR04_Process10ms();
+        if (HC_SR04_TakeResult(&distance_mm, &status)) {
+            UltrasonicTest_DisplayDistance(distance_mm, status);
+        }
+        delay_ms(10U);
     }
 }
