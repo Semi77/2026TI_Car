@@ -36,6 +36,15 @@
                                 <option id="com.ti.ccstudio.buildDefinitions.TMS470_TICLANG_4.0.compilerID.INCLUDE_PATH.247272113" superClass="com.ti.ccstudio.buildDefinitions.TMS470_TICLANG_4.0.compilerID.INCLUDE_PATH" valueType="includePath">
                                     <listOptionValue value="${COM_TI_MSPM0_SDK_INCLUDE_PATH}"/>
                                     <listOptionValue value="${SYSCONFIG_TOOL_INCLUDE_PATH}"/>
+                                    <listOptionValue value="${PROJECT_ROOT}/Driver"/>
+                                    <listOptionValue value="${PROJECT_ROOT}/Driver/Display"/>
+                                    <listOptionValue value="${PROJECT_ROOT}/Driver/Sensor"/>
+                                    <listOptionValue value="${PROJECT_ROOT}/Driver/Algorithm"/>
+                                    <listOptionValue value="${PROJECT_ROOT}/Driver/BSP"/>
+                                    <listOptionValue value="${PROJECT_ROOT}/Driver/IMU/ICM45686"/>
+                                    <listOptionValue value="${PROJECT_ROOT}/Driver/IMU/ICM45686/ICM45686_Port"/>
+                                    <listOptionValue value="${PROJECT_ROOT}/Driver/IMU/MPU6050"/>
+                                    <listOptionValue value="${PROJECT_ROOT}/Driver/IMU/uart_gyro"/>
                                     <listOptionValue value="${PROJECT_ROOT}"/>
                                     <listOptionValue value="${PROJECT_ROOT}/${ConfigName}"/>
                                     <listOptionValue value="${COM_TI_MSPM0_SDK_INSTALL_DIR}/source/third_party/CMSIS/Core/Include"/>
