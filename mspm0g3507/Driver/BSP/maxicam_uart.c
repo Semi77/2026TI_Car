@@ -4,6 +4,7 @@
 #include <stddef.h>
 
 #define MAXICAM_COORD_DIGITS (4U)
+#define MAXICAM_UART_WAIT_LIMIT (100000U)
 
 typedef enum {
     MAXICAM_WAIT_START = 0,
@@ -24,6 +25,21 @@ static volatile bool s_frame_pending;
 
 static MaxiCam_Point s_latest_point;
 static bool s_latest_point_updated;
+
+/* 该函数阻塞发送一个字节到MaixCAM串口。 */
+static bool MaxiCam_SendByte(uint8_t data)
+{
+    uint32_t wait_count = 0U;
+
+    while (DL_UART_Main_isTXFIFOFull(UART_MAXI_INST)) {
+        wait_count++;
+        if (wait_count >= MAXICAM_UART_WAIT_LIMIT) {
+            return false;
+        }
+    }
+    DL_UART_Main_transmitData(UART_MAXI_INST, data);
+    return true;
+}
 
 static bool MaxiCam_IsDigit(uint8_t data)
 {
@@ -150,6 +166,36 @@ bool MaxiCam_UART_GetLatestPoint(MaxiCam_Point *point)
     *point = s_latest_point;
     s_latest_point_updated = false;
     return true;
+}
+
+/* 该函数向MaixCAM发送一行命令并自动补上换行符。 */
+void MaxiCam_UART_SendCommand(const char *command)
+{
+    uint32_t wait_count = 0U;
+
+    if (command == NULL) {
+        return;
+    }
+
+    while (*command != '\0') {
+        if (!MaxiCam_SendByte((uint8_t)*command)) {
+            return;
+        }
+        command++;
+    }
+    if (!MaxiCam_SendByte((uint8_t)'\r')) {
+        return;
+    }
+    if (!MaxiCam_SendByte((uint8_t)'\n')) {
+        return;
+    }
+
+    while (DL_UART_Main_isBusy(UART_MAXI_INST)) {
+        wait_count++;
+        if (wait_count >= MAXICAM_UART_WAIT_LIMIT) {
+            return;
+        }
+    }
 }
 
 void UART_MAXI_INST_IRQHandler(void)

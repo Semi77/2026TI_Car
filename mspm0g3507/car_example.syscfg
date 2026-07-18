@@ -36,6 +36,7 @@ const UART     = scripting.addModule("/ti/driverlib/UART", {}, false);
 const UART1    = UART.addInstance();
 const UART2    = UART.addInstance();
 const UART3    = UART.addInstance();
+const UART4    = UART.addInstance();
 
 /**
  * Write custom configuration values to the imported modules.
@@ -141,20 +142,18 @@ GPIO6.associatedPins[2].pin.$assign  = "PB14";
 GPIO6.associatedPins[3].$name        = "LCD_BLK";
 GPIO6.associatedPins[3].pin.$assign  = "PB26";
 
-GPIO7.$name                         = "KEY_INPUT_B";
-GPIO7.port                          = "PORTB";
-GPIO7.portSegment                   = "Upper";
-GPIO7.associatedPins[0].$name       = "KEY3";
-GPIO7.associatedPins[0].direction   = "INPUT";
+GPIO7.$name                              = "KEY_INPUT_B";
+GPIO7.port                               = "PORTB";
+GPIO7.portSegment                        = "Upper";
+GPIO7.associatedPins[0].$name            = "KEY3";
+GPIO7.associatedPins[0].direction        = "INPUT";
 GPIO7.associatedPins[0].internalResistor = "PULL_UP";
-GPIO7.associatedPins[0].pin.$assign = "PB21";
+GPIO7.associatedPins[0].pin.$assign      = "PB21";
 
-GPIO8.$name                               = "HC_SR04_TRIG";
-GPIO8.port                                = "PORTA";
-GPIO8.associatedPins[0].$name             = "TRIG";
-GPIO8.associatedPins[0].direction         = "OUTPUT";
-GPIO8.associatedPins[0].initialValue      = "CLEARED";
-GPIO8.associatedPins[0].pin.$assign       = "PA1";
+GPIO8.$name                         = "HC_SR04_TRIG";
+GPIO8.port                          = "PORTA";
+GPIO8.associatedPins[0].$name       = "TRIG";
+GPIO8.associatedPins[0].pin.$assign = "PA1";
 
 I2C1.$name                             = "I2C_OLED";
 I2C1.basicEnableController             = true;
@@ -257,6 +256,7 @@ UART1.DMA_CHANNEL_TX.srcLength          = "BYTE";
 UART1.DMA_CHANNEL_TX.peripheral.$assign = "DMA_CH0";
 
 UART2.$name                            = "UART_MAXI";
+UART2.targetBaudRate                   = 115200;
 UART2.peripheral.$assign               = "UART1";
 UART2.txPinConfig.direction            = scripting.forceWrite("OUTPUT");
 UART2.txPinConfig.hideOutputInversion  = scripting.forceWrite(false);
@@ -269,6 +269,7 @@ UART2.rxPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
 UART2.rxPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric10";
 
 UART3.$name                            = "UART_BLUETOOTH";
+UART3.targetBaudRate                   = 115200;
 UART3.enabledInterrupts                = ["RX"];
 UART3.interruptPriority                = "3";
 UART3.enableFIFO                       = true;
@@ -284,6 +285,25 @@ UART3.rxPinConfig.onlyInternalResistor = scripting.forceWrite(false);
 UART3.rxPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
 UART3.rxPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric12";
 
+UART4.$name                            = "UART_GYRO";
+UART4.targetBaudRate                   = 115200;
+UART4.enabledInterrupts                = ["RX"];
+UART4.interruptPriority                = "3";
+UART4.enableFIFO                       = true;
+UART4.rxFifoThreshold                  = "DL_UART_RX_FIFO_LEVEL_ONE_ENTRY";
+UART4.peripheral.$assign               = "UART0";
+UART4.peripheral.rxPin.$assign         = "PA31";
+UART4.peripheral.txPin.$assign         = "PB0";
+UART4.txPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric16";
+UART4.txPinConfig.direction            = scripting.forceWrite("OUTPUT");
+UART4.txPinConfig.hideOutputInversion  = scripting.forceWrite(false);
+UART4.txPinConfig.onlyInternalResistor = scripting.forceWrite(false);
+UART4.txPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
+UART4.rxPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric17";
+UART4.rxPinConfig.hideOutputInversion  = scripting.forceWrite(false);
+UART4.rxPinConfig.onlyInternalResistor = scripting.forceWrite(false);
+UART4.rxPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
+
 /**
  * Pinmux solution for unlocked pins/peripherals. This ensures that minor changes to the automatic solver in a future
  * version of the tool will not impact the pinmux you originally saw.  These lines can be completely deleted in order to
@@ -298,3 +318,6 @@ UART2.peripheral.rxPin.$suggestSolution    = "PA18";
 UART2.peripheral.txPin.$suggestSolution    = "PA17";
 UART3.peripheral.rxPin.$suggestSolution    = "PA13";
 UART3.peripheral.txPin.$suggestSolution    = "PA14";
+UART4.peripheral.$suggestSolution          = "UART0";
+UART4.peripheral.rxPin.$suggestSolution    = "PA31";
+UART4.peripheral.txPin.$suggestSolution    = "PB0";

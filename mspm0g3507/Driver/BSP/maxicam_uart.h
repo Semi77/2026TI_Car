@@ -12,5 +12,6 @@ typedef struct {
 void MaxiCam_UART_Init(void);
 void MaxiCam_UART_Process(void);
 bool MaxiCam_UART_GetLatestPoint(MaxiCam_Point *point);
+void MaxiCam_UART_SendCommand(const char *command);
 
 #endif

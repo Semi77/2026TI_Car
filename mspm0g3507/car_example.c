@@ -534,6 +534,7 @@ void CONTROL_TIMER_INST_IRQHandler(void)
 }
 #endif
 
+#if 0
 #include "ti_msp_dl_config.h"
 #include "Display/st7735s.h"
 #include "delay.h"
@@ -611,6 +612,259 @@ int main(void)
         if (HC_SR04_TakeResult(&distance_mm, &status)) {
             UltrasonicTest_DisplayDistance(distance_mm, status);
         }
+        delay_ms(10U);
+    }
+}
+#endif
+
+#if 0
+#include "ti_msp_dl_config.h"
+#include "Display/st7735s.h"
+#include "IMU/uart_gyro/uart_gyro.h"
+#include "delay.h"
+
+#include <stdint.h>
+
+/* 该函数初始化ST7735S串口陀螺仪测试界面。 */
+static void UARTGyroTest_DisplayInit(void)
+{
+    (void)ST7735S_FillScreen(ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(16U, 16U, "UART GYRO",
+        ST7735S_COLOR_CYAN, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(8U, 48U, "YAW:",
+        ST7735S_COLOR_YELLOW, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(48U, 48U, "WAITING",
+        ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(8U, 80U, "UART0 115200",
+        ST7735S_COLOR_GREEN, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(8U, 104U, "RX:PA31 TX:PB0",
+        ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
+}
+
+/* 该函数把Yaw角度转换为百分之一度的有符号整数。 */
+static int32_t UARTGyroTest_ScaleYaw(float yaw_deg)
+{
+    if (yaw_deg >= 0.0f) {
+        return (int32_t)(yaw_deg * 100.0f + 0.5f);
+    }
+    return (int32_t)(yaw_deg * 100.0f - 0.5f);
+}
+
+/* 该函数返回无符号十进制整数在屏幕上占用的字符数量。 */
+static uint8_t UARTGyroTest_GetDigitCount(uint32_t value)
+{
+    uint8_t count = 1U;
+
+    while (value >= 10U) {
+        value /= 10U;
+        count++;
+    }
+    return count;
+}
+
+/* 该函数在ST7735S上显示带两位小数的Yaw角度。 */
+static void UARTGyroTest_DisplayYaw(float yaw_deg)
+{
+    int32_t scaled_yaw = UARTGyroTest_ScaleYaw(yaw_deg);
+    uint32_t magnitude;
+    uint32_t integer_part;
+    uint16_t cursor_x = 48U;
+
+    (void)ST7735S_FillRect(48U, 48U, 80U, 16U,
+        ST7735S_COLOR_BLACK);
+
+    if (scaled_yaw < 0) {
+        magnitude = (uint32_t)(-scaled_yaw);
+        (void)ST7735S_DrawChar(cursor_x, 48U, '-',
+            ST7735S_COLOR_GREEN, ST7735S_COLOR_BLACK);
+        cursor_x = (uint16_t)(cursor_x + 8U);
+    } else {
+        magnitude = (uint32_t)scaled_yaw;
+    }
+
+    integer_part = magnitude / 100U;
+    (void)ST7735S_DrawInteger(cursor_x, 48U, (int32_t)integer_part,
+        ST7735S_COLOR_GREEN, ST7735S_COLOR_BLACK);
+    cursor_x = (uint16_t)(cursor_x +
+        (uint16_t)UARTGyroTest_GetDigitCount(integer_part) * 8U);
+    (void)ST7735S_DrawChar(cursor_x, 48U, '.',
+        ST7735S_COLOR_GREEN, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawInteger((uint16_t)(cursor_x + 8U), 48U,
+        (int32_t)((magnitude / 10U) % 10U),
+        ST7735S_COLOR_GREEN, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawInteger((uint16_t)(cursor_x + 16U), 48U,
+        (int32_t)(magnitude % 10U),
+        ST7735S_COLOR_GREEN, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString((uint16_t)(cursor_x + 24U), 48U, "deg",
+        ST7735S_COLOR_GREEN, ST7735S_COLOR_BLACK);
+}
+
+/* 该函数初始化板级外设、串口陀螺仪和彩屏并持续显示Yaw角度。 */
+int main(void)
+{
+    float yaw_deg = 0.0f;
+
+    SYSCFG_DL_init();
+    UARTGyro_Init();
+
+
+    if (!ST7735S_Init(ST7735S_ROTATION_0)) {
+        while (1) {
+        }
+    }
+    UARTGyroTest_DisplayInit();
+
+    (void)ST7735S_FillRect(48U, 48U, 80U, 16U,
+        ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(48U, 48U, "CAL 21S",
+        ST7735S_COLOR_YELLOW, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(8U, 128U, "KEEP STILL",
+        ST7735S_COLOR_RED, ST7735S_COLOR_BLACK);
+    UARTGyro_CalibrateBias();
+    (void)ST7735S_FillRect(48U, 48U, 80U, 16U,
+        ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(48U, 48U, "CAL DONE",
+        ST7735S_COLOR_GREEN, ST7735S_COLOR_BLACK);
+    (void)ST7735S_FillRect(8U, 128U, 96U, 16U,
+        ST7735S_COLOR_BLACK);
+
+    while (1) {
+        if (UARTGyro_GetYaw(&yaw_deg)) {
+            UARTGyroTest_DisplayYaw(yaw_deg);
+        }
+        delay_ms(20U);
+    }
+}
+#endif
+
+#include "ti_msp_dl_config.h"
+#include "Display/st7735s.h"
+#include "BSP/maxicam_uart.h"
+#include "delay.h"
+
+#include <stdint.h>
+
+/* 该函数返回无符号整数在屏幕上显示所需的字符数量。 */
+static uint8_t MaxiCamKey_GetDigitCount(uint32_t value)
+{
+    uint8_t count = 1U;
+
+    while (value >= 10U) {
+        value /= 10U;
+        count++;
+    }
+    return count;
+}
+
+/* 该函数初始化按键控制MaixCAM的彩屏提示界面。 */
+static void MaxiCamKey_DisplayInit(void)
+{
+    (void)ST7735S_FillScreen(ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(8U, 8U, "MAXICAM KEY",
+        ST7735S_COLOR_CYAN, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(8U, 36U, "PB21 KEY",
+        ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(8U, 56U, "PRESS:NEXT",
+        ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(8U, 76U, "RECT/CIRCLE",
+        ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(8U, 92U, "KEY:",
+        ST7735S_COLOR_YELLOW, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(8U, 104U, "CMD:",
+        ST7735S_COLOR_YELLOW, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(8U, 128U, "P:",
+        ST7735S_COLOR_YELLOW, ST7735S_COLOR_BLACK);
+}
+
+/* 该函数在屏幕上显示最近一次按键发送给MaixCAM的命令。 */
+static void MaxiCamKey_DisplayCommand(const char *command)
+{
+    (void)ST7735S_FillRect(48U, 104U, 80U, 16U,
+        ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(48U, 104U, command,
+        ST7735S_COLOR_GREEN, ST7735S_COLOR_BLACK);
+}
+
+/* 该函数直接读取PB21功能按键是否处于按下状态。 */
+static uint8_t MaxiCamKey_IsPressed(void)
+{
+    return ((DL_GPIO_readPins(KEY_INPUT_B_PORT, KEY_INPUT_B_KEY3_PIN) &
+        KEY_INPUT_B_KEY3_PIN) == 0U) ? 1U : 0U;
+}
+
+/* 该函数在屏幕上显示PB21功能按键当前的原始状态。 */
+static void MaxiCamKey_DisplayKeyState(uint8_t pressed)
+{
+    (void)ST7735S_FillRect(48U, 92U, 64U, 16U,
+        ST7735S_COLOR_BLACK);
+    if (pressed != 0U) {
+        (void)ST7735S_DrawString(48U, 92U, "DOWN",
+            ST7735S_COLOR_RED, ST7735S_COLOR_BLACK);
+    } else {
+        (void)ST7735S_DrawString(48U, 92U, "UP",
+            ST7735S_COLOR_GREEN, ST7735S_COLOR_BLACK);
+    }
+}
+
+/* 该函数在屏幕上显示MaixCAM返回的最新坐标点。 */
+static void MaxiCamKey_DisplayPoint(const MaxiCam_Point *point)
+{
+    uint16_t cursor_x = 28U;
+
+    if (point == NULL) {
+        return;
+    }
+
+    (void)ST7735S_FillRect(28U, 128U, 100U, 16U,
+        ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawInteger(cursor_x, 128U, (int32_t)point->x,
+        ST7735S_COLOR_GREEN, ST7735S_COLOR_BLACK);
+    cursor_x = (uint16_t)(cursor_x +
+        (uint16_t)MaxiCamKey_GetDigitCount(point->x) * 8U);
+    (void)ST7735S_DrawChar(cursor_x, 128U, ',',
+        ST7735S_COLOR_GREEN, ST7735S_COLOR_BLACK);
+    cursor_x = (uint16_t)(cursor_x + 8U);
+    (void)ST7735S_DrawInteger(cursor_x, 128U, (int32_t)point->y,
+        ST7735S_COLOR_GREEN, ST7735S_COLOR_BLACK);
+}
+
+/* 该函数根据按键事件向MaixCAM发送对应的识别模式命令。 */
+static void MaxiCamKey_HandlePress(void)
+{
+    MaxiCamKey_DisplayCommand("NEXT");
+    MaxiCam_UART_SendCommand("NEXT");
+}
+
+/* 该函数初始化板级外设并循环扫描按键来控制MaixCAM。 */
+int main(void)
+{
+    uint8_t key_pressed;
+    uint8_t last_key_pressed = 0U;
+    MaxiCam_Point point;
+
+    SYSCFG_DL_init();
+    MaxiCam_UART_Init();
+
+    if (!ST7735S_Init(ST7735S_ROTATION_0)) {
+        while (1) {
+        }
+    }
+    MaxiCamKey_DisplayInit();
+
+    while (1) {
+        MaxiCam_UART_Process();
+
+        if (MaxiCam_UART_GetLatestPoint(&point)) {
+            MaxiCamKey_DisplayPoint(&point);
+        }
+
+        key_pressed = MaxiCamKey_IsPressed();
+        MaxiCamKey_DisplayKeyState(key_pressed);
+        if ((key_pressed != 0U) && (last_key_pressed == 0U)) {
+            MaxiCamKey_HandlePress();
+        }
+        last_key_pressed = key_pressed;
+
         delay_ms(10U);
     }
 }
