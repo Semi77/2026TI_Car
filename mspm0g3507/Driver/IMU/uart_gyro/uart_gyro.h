@@ -15,7 +15,7 @@ bool UARTGyro_GetGyroZ(float *gyro_z_dps);
 /* 该函数发送命令将模块当前Yaw角度设置为零并保存。 */
 void UARTGyro_ResetYaw(void);
 
-/* 该函数发送命令执行模块零偏校准并在完成后保存。 */
-void UARTGyro_CalibrateBias(void);
+/* 该函数执行零偏校准、读取校准状态并返回是否成功。 */
+bool UARTGyro_CalibrateBias(void);
 
 #endif

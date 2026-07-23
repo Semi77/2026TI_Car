@@ -55,6 +55,13 @@ bool ST7735S_DrawString(uint16_t x, uint16_t y, const char *text,
 bool ST7735S_DrawInteger(uint16_t x, uint16_t y, int32_t value,
     uint16_t foreground, uint16_t background);
 
+/* 该函数清屏并绘制小车Yaw、角速度、灰度和运行状态标签。 */
+bool ST7735S_CarStatusInit(void);
+
+/* 该函数刷新小车状态数据，参数yaw_deg和gyro_z_dps表示姿态数据，gray_digital表示八路灰度位图，state表示运行状态。 */
+bool ST7735S_CarStatusUpdate(float yaw_deg, float gyro_z_dps,
+    uint8_t gray_digital, const char *state);
+
 /* 该函数返回当前显示方向下的屏幕宽度。 */
 uint16_t ST7735S_GetWidth(void);
 

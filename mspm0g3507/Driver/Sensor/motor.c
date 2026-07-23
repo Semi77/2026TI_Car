@@ -56,9 +56,10 @@ void Motor_Control(int16_t speedA,int16_t speedB)
 	DL_TimerA_setCaptureCompareValue(PWM_MOTOR_INST, speedB, DL_TIMER_CC_1_INDEX);
 }
 
+/* 该函数控制小车向前行驶，参数speed表示左右电机的目标PWM值。 */
 void Motor_Forward(int16_t speed)
 {
-    Motor_Control(-speed, speed);
+    Motor_Control(speed, -speed);
 }
 
 void Motor_Stop(void)

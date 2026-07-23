@@ -18,6 +18,15 @@
                 "name": "timx_timer_mode_periodic_sleep",
                 "resourceId": "/timx_timer_mode_periodic_sleep/__ccs_3_compilerIncludes"
             }
+        },
+        {
+            "name": "mspm0g3507",
+            "type": "ccs-debug",
+            "request": "launch",
+            "projectInfo": {
+                "name": "mspm0g3507",
+                "resourceId": "/mspm0g3507"
+            }
         }
     ]
 }

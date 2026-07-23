@@ -9,17 +9,21 @@
 #define TEST_MODE_UART        3U
 
 #ifndef MOTOR_TEST_SPEED
-#define MOTOR_TEST_SPEED       1000
+#define MOTOR_TEST_SPEED       400
 #endif
 
-#define MOTOR_RUN_TIME_MS      1000U
-#define MOTOR_STOP_TIME_MS     500U
-#define MOTOR_CYCLE_PAUSE_MS   1500U
 #define UART_TEST_PERIOD_MS    1000U
 
 void Test_OLED_Run(void);
 void Test_Motor_Run(void);
 void Test_UART_Run(void);
+
+/* 该函数校准并读取串口陀螺仪，然后在SPI屏幕显示姿态数据和运行状态。 */
+void Test_UARTGyroST7735_Run(void);
+
+/* 该函数运行串口陀螺仪、八路灰度传感器和OLED联合显示测试，调用后不会返回。 */
+void Test_UARTGyroGrayOLED_Run(void);
+
 void Test_BluetoothOLED_Init(void);
 void Test_BluetoothOLED_Process(void);
 

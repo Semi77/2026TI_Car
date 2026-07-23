@@ -1,40 +1,50 @@
-/* 原整车控制程序暂时停用，完成超声波和彩屏联调后可删除该编译开关恢复。 */
+/* 该编译块启用串口陀螺仪与SPI屏幕联合测试入口。 */
 #if 0
-/* Original vehicle control application retained for later recovery. */
 #include "ti_msp_dl_config.h"
-#include "Display/oled_hardware_i2c.h"
+#include "test.h"
+
+/* 该测试入口调用串口陀螺仪与SPI屏幕联合测试。 */
+int main(void)
+{
+    Test_UARTGyroST7735_Run();
+
+    while (1) {
+    }
+}
+#endif
+
+#if 1
+/* 该编译块启用整车传感器采集、状态机控制、电机驱动和屏幕状态显示。 */
+#include "ti_msp_dl_config.h"
 #include "Display/st7735s.h"
 #include "BSP/key_input.h"
-#include "IMU.h"
-#include "imu_drdy.h"
-#include "imu_host.h"
-#include "imu_uart_port.h"
+#include "BSP/vofa_firewater.h"
+#include "IMU/uart_gyro/uart_gyro.h"
 #include "delay.h"
 #include "No_Mcu_Ganv_Grayscale_Sensor_Config.h"
-#include "hc_sr04.h"
 #include "motor.h"
 #include "maxicam_uart.h"
 
 #include <stdint.h>
 
 #define SENSOR_UPDATE_PERIOD_MS  10U
-#define OLED_REFRESH_PERIOD_MS   100U
+#define SPI_REFRESH_PERIOD_MS    100U
 #define MOTOR_BASE_SPEED         400
 #define MOTOR_MAX_SPEED          800
 #define GRAY_PID_KP              30.0f
 #define GRAY_PID_KI              0.0f
 #define GRAY_PID_KD              5.0f
 #define BLIND_BASE_SPEED         280
-#define BLIND_LEFT_COMPENSATION  20
+#define BLIND_LEFT_COMPENSATION  -5
 #define GYRO_PID_KP              1.5f
 #define GYRO_PID_KI              0.0f
 #define GYRO_PID_KD              0.8f
 #define GYRO_PID_MAX_OUTPUT      100.0f
 #define TURN_SPEED               180
-#define TURN_ANGLE_DEGREES       83.0f
+#define TURN_ANGLE_DEGREES       80.0f
 #define TURN_ANGLE_TOLERANCE     5.0f
 #define TURN_ADVANCE_TIME_MS     800U
-#define STATE_SWITCH_MIN_TICKS   100U
+#define STATE_SWITCH_MIN_TICKS   50U
 #define STATE_CONFIRM_TICKS      3U
 
 typedef enum {
@@ -50,6 +60,7 @@ static volatile uint32_t g_10ms_ticks = 0U;
 static CarState_t g_car_state = CAR_STATE_TRACK;
 static uint32_t g_state_ticks = 0U;
 static uint8_t g_state_confirm_count = 0U;
+static float g_last_track_yaw = 0.0f;
 static float g_blind_target_yaw = 0.0f;
 static float g_turn_target_yaw = 0.0f;
 static CarState_t g_pending_turn = CAR_STATE_TURN_LEFT;
@@ -73,7 +84,12 @@ static float g_last_gray_error = 0.0f;
 static float g_gray_integral = 0.0f;
 static float g_last_gyro_error = 0.0f;
 static float g_gyro_integral = 0.0f;
+static float g_uart_yaw_deg = 0.0f;
+static float g_uart_gyro_z_dps = 0.0f;
+static bool g_uart_yaw_ready = false;
 
+#if 0
+/* 以下超声波显示代码已停用，保留以便后续需要时恢复。 */
 /* 该函数返回无符号十进制整数在屏幕上需要显示的字符数量。 */
 static uint8_t Ultrasonic_GetDigitCount(uint32_t value)
 {
@@ -154,8 +170,9 @@ static void Ultrasonic_DisplayUpdate(
     (void)ST7735S_DrawString(64U, 72U, status_text,
         status_color, ST7735S_COLOR_BLACK);
 }
+#endif
 
-    /* A轮反向、B轮正向时，两轮才是车体的同向前进。 */
+    /* 当前底盘A轮正向、B轮反向时，两轮构成车体向前运动。 */
 static float Gyro_WrapError(float error)
 {
     while (error > 180.0f) {
@@ -168,7 +185,7 @@ static float Gyro_WrapError(float error)
     return error;
 }
 
-    /* 盲走实验：关闭角度 PID，右轮较快，因此提高左轮速度进行补偿。 */
+/* 该函数进入盲走状态并锁定参数target_yaw指定的目标航向角。 */
 static void Car_EnterBlind(float target_yaw)
 {
     g_car_state = CAR_STATE_BLIND;
@@ -178,6 +195,49 @@ static void Car_EnterBlind(float target_yaw)
     g_gyro_integral = 0.0f;
     g_state_ticks = 0U;
     g_state_confirm_count = 0U;
+}
+
+/* 该函数在盲走阶段通过航向角PID维持锁存角度并限制左右轮目标速度。 */
+static void Car_RunBlind(void)
+{
+    float yaw_error = Gyro_WrapError(g_blind_target_yaw - g_uart_yaw_deg);
+    float derivative = yaw_error - g_last_gyro_error;
+    float output;
+    int32_t left_speed;
+    int32_t right_speed;
+
+    g_gyro_integral += yaw_error;
+    if (g_gyro_integral > GYRO_PID_MAX_OUTPUT) {
+        g_gyro_integral = GYRO_PID_MAX_OUTPUT;
+    } else if (g_gyro_integral < -GYRO_PID_MAX_OUTPUT) {
+        g_gyro_integral = -GYRO_PID_MAX_OUTPUT;
+    }
+
+    output = GYRO_PID_KP * yaw_error +
+        GYRO_PID_KI * g_gyro_integral +
+        GYRO_PID_KD * derivative;
+    if (output > GYRO_PID_MAX_OUTPUT) {
+        output = GYRO_PID_MAX_OUTPUT;
+    } else if (output < -GYRO_PID_MAX_OUTPUT) {
+        output = -GYRO_PID_MAX_OUTPUT;
+    }
+    g_last_gyro_error = yaw_error;
+
+    left_speed = BLIND_BASE_SPEED + BLIND_LEFT_COMPENSATION -
+        (int32_t)output;
+    right_speed = BLIND_BASE_SPEED + (int32_t)output;
+    if (left_speed < 0) {
+        left_speed = 0;
+    } else if (left_speed > MOTOR_MAX_SPEED) {
+        left_speed = MOTOR_MAX_SPEED;
+    }
+    if (right_speed < 0) {
+        right_speed = 0;
+    } else if (right_speed > MOTOR_MAX_SPEED) {
+        right_speed = MOTOR_MAX_SPEED;
+    }
+
+    Motor_Control((int16_t)left_speed, (int16_t)-right_speed);
 }
 
 static void Car_EnterAdvanceBeforeTurn(CarState_t turn_state)
@@ -209,7 +269,7 @@ static void Car_RunAdvanceBeforeTurn(void)
 static void Car_EnterTurn(CarState_t turn_state)
 {
     g_car_state = turn_state;
-    g_turn_target_yaw = IMU_GetYaw();
+    g_turn_target_yaw = g_uart_yaw_deg;
     if (turn_state == CAR_STATE_TURN_LEFT) {
         g_turn_target_yaw += TURN_ANGLE_DEGREES;
     } else {
@@ -224,7 +284,7 @@ static void Car_EnterTurn(CarState_t turn_state)
 
 static void Car_RunTurn(CarState_t turn_state)
 {
-    float yaw_error = Gyro_WrapError(g_turn_target_yaw - IMU_GetYaw());
+    float yaw_error = Gyro_WrapError(g_turn_target_yaw - g_uart_yaw_deg);
 
     if ((yaw_error <= TURN_ANGLE_TOLERANCE) &&
         (yaw_error >= -TURN_ANGLE_TOLERANCE)) {
@@ -242,6 +302,8 @@ static const char *Car_GetStateName(CarState_t state)
     switch (state) {
     case CAR_STATE_TRACK:
         return "TRACK";
+    case CAR_STATE_ADVANCE_BEFORE_TURN:
+        return "ADVANCE";
     case CAR_STATE_BLIND:
         return "BLIND";
     case CAR_STATE_TURN_LEFT:
@@ -268,14 +330,14 @@ static uint8_t Gray_CountBlack(uint8_t digital)
 
 static uint8_t Gray_LeftTurnDetected(uint8_t digital)
 {
-    return (((digital & 0x0FU) == 0U) &&
-            ((digital & 0xF0U) != 0U));
+    return (((digital & 0xF0U) == 0U) &&
+            ((digital & 0x0FU) != 0U));
 }
 
 static uint8_t Gray_RightTurnDetected(uint8_t digital)
 {
-    return (((digital & 0xF0U) == 0U) &&
-            ((digital & 0x0FU) != 0U));
+    return (((digital & 0x0FU) == 0U) &&
+            ((digital & 0xF0U) != 0U));
 }
 
 static void Car_UpdateState(uint8_t digital)
@@ -286,6 +348,9 @@ static void Car_UpdateState(uint8_t digital)
 
     switch (g_car_state) {
     case CAR_STATE_TRACK:
+        if (black_count > 0U) {
+            g_last_track_yaw = g_uart_yaw_deg;
+        }
         if (g_state_ticks < STATE_SWITCH_MIN_TICKS) {
             g_state_confirm_count = 0U;
         } else if (Gray_LeftTurnDetected(digital) != 0U) {
@@ -295,7 +360,7 @@ static void Car_UpdateState(uint8_t digital)
         } else if (black_count == 0U) {
             g_state_confirm_count++;
             if (g_state_confirm_count >= STATE_CONFIRM_TICKS) {
-                Car_EnterBlind(IMU_GetYaw());
+                Car_EnterBlind(g_last_track_yaw);
             }
         } else {
             g_state_confirm_count = 0U;
@@ -337,50 +402,41 @@ static void Car_UpdateState(uint8_t digital)
 
 int main(void)
 {
-    int imu_calibration_status;
-    uint32_t last_oled_tick = 0U;
-    uint32_t ultrasonic_distance_mm = 0U;
-    HC_SR04_Status ultrasonic_status = HC_SR04_STATUS_WAITING;
+    uint32_t last_spi_tick = 0U;
     uint8_t key_event;
 
     SYSCFG_DL_init();
 
     MaxiCam_UART_Init();
 
+    /* 该功能块按参考例程顺序初始化灰度传感器并启用ADC中断。 */
+    No_MCU_Ganv_Sensor_Init(&g_gray_sensor, g_gray_white, g_gray_black);
     NVIC_ClearPendingIRQ(ADC12_0_INST_INT_IRQN);
     NVIC_EnableIRQ(ADC12_0_INST_INT_IRQN);
-
-    No_MCU_Ganv_Sensor_Init(&g_gray_sensor, g_gray_white, g_gray_black);
-
-    if (IMU_Init() != 0) {
-        Motor_Stop();
-        while (1) {
-        }
-    }
-    delay_ms(2000);
-    imu_calibration_status = IMU_Calibrate();
-    /* 校准质量不足仍启动业务；传感器读取失败则保持停车。 */
-    if ((imu_calibration_status != IMU_CALIBRATION_OK) &&
-        (imu_calibration_status != IMU_CALIBRATION_QUALITY_WARNING)) {
-        Motor_Stop();
-        while (1) {
-        }
-    }
-    IMU_DRDY_Init();
-    IMU_UART_Init();
-    (void)IMU_HostTxInit(IMU_UART_Write);
+    delay_ms(100U);
+    UARTGyro_Init();
 
     KeyInput_Init();
-    HC_SR04_Init();
 
-    OLED_Init();
-    OLED_Clear();
-    OLED_DrawSensorLabels();
-
-    (void)ST7735S_Init(ST7735S_ROTATION_0);
-    Ultrasonic_DisplayInit();
-    (void)ST7735S_DrawString(16U, 120U, "KEY:",
+    if (!ST7735S_Init(ST7735S_ROTATION_0)) {
+        Motor_Stop();
+        while (1) {
+        }
+    }
+    (void)ST7735S_FillScreen(ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(16U, 48U, "CALIBRATING",
         ST7735S_COLOR_YELLOW, ST7735S_COLOR_BLACK);
+    (void)ST7735S_DrawString(24U, 80U, "KEEP STILL",
+        ST7735S_COLOR_RED, ST7735S_COLOR_BLACK);
+    if (UARTGyro_CalibrateBias()) {
+        (void)ST7735S_DrawString(32U, 112U, "CAL OK",
+            ST7735S_COLOR_GREEN, ST7735S_COLOR_BLACK);
+    } else {
+        (void)ST7735S_DrawString(24U, 112U, "CAL FAIL",
+            ST7735S_COLOR_RED, ST7735S_COLOR_BLACK);
+    }
+    delay_ms(1000U);
+    (void)ST7735S_CarStatusInit();
 
     DL_TimerA_startCounter(CONTROL_TIMER_INST);
     NVIC_ClearPendingIRQ(CONTROL_TIMER_INST_INT_IRQN);
@@ -388,41 +444,43 @@ int main(void)
 
     while (1) {
         MaxiCam_UART_Process();
-        IMU_DRDY_Process();
+        if (UARTGyro_GetYaw(&g_uart_yaw_deg)) {
+            g_uart_yaw_ready = true;
+        }
+        (void)UARTGyro_GetGyroZ(&g_uart_gyro_z_dps);
 
         if (g_10ms_flag != 0U) {
             g_10ms_flag = 0U;
 
             KeyInput_Process10ms();
-            HC_SR04_Process10ms();
-            (void)HC_SR04_TakeResult(
-                &ultrasonic_distance_mm, &ultrasonic_status);
 
             key_event = KeyInput_GetPressEvent();
             if (key_event != KEY_INPUT_NONE) {
-                (void)ST7735S_FillRect(56U, 120U, 48U, 16U,
+                (void)ST7735S_FillRect(40U, 120U, 72U, 16U,
                     ST7735S_COLOR_BLACK);
 
                 if (key_event == KEY_INPUT_KEY1) {
-                    (void)ST7735S_DrawString(56U, 120U, "KEY1",
+                    (void)ST7735S_DrawString(40U, 120U, "KEY1",
                         ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
                 } else if (key_event == KEY_INPUT_KEY2) {
-                    (void)ST7735S_DrawString(56U, 120U, "KEY2",
+                    (void)ST7735S_DrawString(40U, 120U, "KEY2",
                         ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
                 } else if (key_event == KEY_INPUT_KEY3) {
-                    (void)ST7735S_DrawString(56U, 120U, "KEY3",
+                    (void)ST7735S_DrawString(40U, 120U, "KEY3",
                         ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
                 }
             }
-
-
             No_Mcu_Ganv_Sensor_Task_Without_tick(&g_gray_sensor);
             g_gray_digital = Get_Digtal_For_User(&g_gray_sensor);
             (void)Get_Normalize_For_User(&g_gray_sensor, g_gray_normal);
 
-            Car_UpdateState(g_gray_digital);
+            /* 该功能块在陀螺仪数据就绪后执行灰度巡线、盲区直行和转向控制。 */
+            if (!g_uart_yaw_ready) {
+                Motor_Stop();
+            } else {
+                Car_UpdateState(g_gray_digital);
 
-            switch (g_car_state) {
+                switch (g_car_state) {
             case CAR_STATE_TRACK:
                 {
                     static const int8_t weights[8] = {-7, -5, -3, -1, 1, 3, 5, 7};
@@ -484,14 +542,12 @@ int main(void)
                         right_speed = MOTOR_MAX_SPEED;
                     }
 
-                    Motor_Control((int16_t)-left_speed, (int16_t)right_speed);
+                    Motor_Control((int16_t)left_speed, (int16_t)-right_speed);
                 }
                 break;
 
             case CAR_STATE_BLIND:
-                Motor_Control(
-                    (int16_t)-(BLIND_BASE_SPEED + BLIND_LEFT_COMPENSATION),
-                    (int16_t)BLIND_BASE_SPEED);
+                Car_RunBlind();
                 break;
 
             case CAR_STATE_ADVANCE_BEFORE_TURN:
@@ -506,21 +562,22 @@ int main(void)
             default:
                 Motor_Stop();
                 break;
+                }
             }
 
-            if ((g_10ms_ticks - last_oled_tick) >=
-                (OLED_REFRESH_PERIOD_MS / SENSOR_UPDATE_PERIOD_MS)) {
-                last_oled_tick = g_10ms_ticks;
-                OLED_UpdateSensorValues((int32_t)IMU_GetYaw(),
-                    (int32_t)IMU_GetGyroZ(), g_gray_digital,
-                    Car_GetStateName(g_car_state),
-                    g_gray_normal);
-                Ultrasonic_DisplayUpdate(
-                    ultrasonic_distance_mm, ultrasonic_status);
+            if ((g_10ms_ticks - last_spi_tick) >=
+                (SPI_REFRESH_PERIOD_MS / SENSOR_UPDATE_PERIOD_MS)) {
+                const char *display_state = g_uart_yaw_ready ?
+                    Car_GetStateName(g_car_state) : "GYRO_WAIT";
+
+                last_spi_tick = g_10ms_ticks;
+                /* 该测试功能块每100毫秒通过UART_TEST发送数值1至8的FireWater固定数据帧。 */
+                // VOFA_FireWater_Send8S32(
+                //      "test", 1, 2, 3, 4, 5, 6, 7, 8);
+                (void)ST7735S_CarStatusUpdate(g_uart_yaw_deg,
+                    g_uart_gyro_z_dps, g_gray_digital, display_state);
             }
         }
-
-        (void)IMU_HostTxProcess();
     }
 }
 void CONTROL_TIMER_INST_IRQHandler(void)
@@ -529,7 +586,6 @@ void CONTROL_TIMER_INST_IRQHandler(void)
         DL_TimerA_clearInterruptStatus(CONTROL_TIMER_INST, DL_TIMER_IIDX_ZERO);
         g_10ms_ticks++;
         g_10ms_flag = 1U;
-        IMU_HostTimerTick10ms();
     }
 }
 #endif
@@ -737,6 +793,7 @@ int main(void)
 }
 #endif
 
+#if 0
 #include "ti_msp_dl_config.h"
 #include "Display/st7735s.h"
 #include "BSP/maxicam_uart.h"
@@ -868,3 +925,4 @@ int main(void)
         delay_ms(10U);
     }
 }
+#endif

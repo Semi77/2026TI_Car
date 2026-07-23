@@ -1,33 +1,37 @@
 #include "ADC.h"
-volatile bool gCheckADC;        //ADC采集成功标志位
-//读取ADC的数据
+volatile bool gCheckADC;
+
+#define ADC_WAIT_TIMEOUT_LOOPS (100000U)
+
+/* 该函数启动一次ADC转换并返回本次12位采样结果。 */
 unsigned int adc_getValue(void)
 {
         unsigned int gAdcResult = 0;
+        uint32_t wait_count = 0U;
 
-        //软件触发ADC开始转换
-        DL_ADC12_startConversion(ADC12_0_INST);
-        //如果当前状态为正在转换中则等待转换结束
-        while (false == gCheckADC) {
-            __WFE();
-        }
-        //获取数据
-        gAdcResult = DL_ADC12_getMemResult(ADC12_0_INST, ADC12_0_ADCMEM_ADC_CH0);
-
-        //清除标志位
         gCheckADC = false;
+        DL_ADC12_startConversion(ADC12_0_INST);
+
+        while ((false == gCheckADC) &&
+            (wait_count < ADC_WAIT_TIMEOUT_LOOPS)) {
+            wait_count++;
+        }
+        if (false == gCheckADC) {
+            return 0U;
+        }
+
+        gAdcResult = DL_ADC12_getMemResult(ADC12_0_INST, ADC12_0_ADCMEM_ADC_CH0);
 
         return gAdcResult;
 }
-//ADC中断服务函数
+
+/* 该函数处理ADC转换完成中断并通知阻塞采样函数读取结果。 */
 void ADC12_0_INST_IRQHandler(void)
 {
-        //查询并清除ADC中断
         switch (DL_ADC12_getPendingInterrupt(ADC12_0_INST))
         {
-              //检查是否完成数据采集
               case DL_ADC12_IIDX_MEM0_RESULT_LOADED:
-                        gCheckADC = true;//将标志位置1
+                        gCheckADC = true;
                         break;
               default:
                         break;

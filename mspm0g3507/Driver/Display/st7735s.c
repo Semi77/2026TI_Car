@@ -424,6 +424,112 @@ bool ST7735S_DrawInteger(uint16_t x, uint16_t y, int32_t value,
     return ST7735S_DrawString(x, y, text, foreground, background);
 }
 
+/* 该函数返回无符号整数的十进制字符数量，参数value表示待统计数值。 */
+static uint8_t ST7735S_GetDigitCount(uint32_t value)
+{
+    uint8_t count = 1U;
+
+    while (value >= 10U) {
+        value /= 10U;
+        count++;
+    }
+    return count;
+}
+
+/* 该函数在指定位置显示一位小数的有符号数，参数x和y表示位置，value表示待显示数值。 */
+static bool ST7735S_DrawSignedTenth(uint16_t x, uint16_t y, float value)
+{
+    int32_t scaled_value;
+    uint32_t magnitude;
+    uint32_t integer_part;
+    uint16_t cursor_x;
+    bool result = true;
+
+    if (value < 0.0f) {
+        scaled_value = (int32_t)(value * 10.0f - 0.5f);
+    } else {
+        scaled_value = (int32_t)(value * 10.0f + 0.5f);
+    }
+
+    result &= ST7735S_FillRect(x, y,
+        (uint16_t)(s_width - x), 16U, ST7735S_COLOR_BLACK);
+    if (scaled_value < 0) {
+        result &= ST7735S_DrawChar(x, y, '-',
+            ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
+        magnitude = (uint32_t)(-scaled_value);
+    } else {
+        result &= ST7735S_DrawChar(x, y, '+',
+            ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
+        magnitude = (uint32_t)scaled_value;
+    }
+
+    integer_part = magnitude / 10U;
+    result &= ST7735S_DrawInteger((uint16_t)(x + 8U), y,
+        (int32_t)integer_part, ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
+    cursor_x = (uint16_t)(x + 8U +
+        (uint16_t)ST7735S_GetDigitCount(integer_part) * 8U);
+    result &= ST7735S_DrawChar(cursor_x, y, '.',
+        ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
+    result &= ST7735S_DrawInteger((uint16_t)(cursor_x + 8U), y,
+        (int32_t)(magnitude % 10U),
+        ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
+    return result;
+}
+
+/* 该函数清屏并绘制小车Yaw、角速度、灰度和运行状态标签。 */
+bool ST7735S_CarStatusInit(void)
+{
+    bool result = true;
+
+    result &= ST7735S_FillScreen(ST7735S_COLOR_BLACK);
+    result &= ST7735S_DrawString(24U, 0U, "CAR STATUS",
+        ST7735S_COLOR_CYAN, ST7735S_COLOR_BLACK);
+    result &= ST7735S_DrawString(0U, 24U, "YAW:",
+        ST7735S_COLOR_YELLOW, ST7735S_COLOR_BLACK);
+    result &= ST7735S_DrawString(0U, 48U, "GZ :",
+        ST7735S_COLOR_YELLOW, ST7735S_COLOR_BLACK);
+    result &= ST7735S_DrawString(0U, 72U, "GRAY:",
+        ST7735S_COLOR_YELLOW, ST7735S_COLOR_BLACK);
+    result &= ST7735S_DrawString(0U, 96U, "STATE:",
+        ST7735S_COLOR_YELLOW, ST7735S_COLOR_BLACK);
+    result &= ST7735S_DrawString(0U, 120U, "KEY:",
+        ST7735S_COLOR_YELLOW, ST7735S_COLOR_BLACK);
+    return result;
+}
+
+/* 该函数刷新小车状态数据，参数yaw_deg和gyro_z_dps表示姿态数据，gray_digital表示八路灰度位图，state表示运行状态。 */
+bool ST7735S_CarStatusUpdate(float yaw_deg, float gyro_z_dps,
+    uint8_t gray_digital, const char *state)
+{
+    char gray_text[11];
+    uint8_t channel;
+    bool result = true;
+
+    if (state == NULL) {
+        return false;
+    }
+
+    gray_text[0] = '(';
+    for (channel = 0U; channel < 8U; channel++) {
+        gray_text[channel + 1U] =
+            (char)('0' + ((gray_digital >> channel) & 0x01U));
+    }
+    gray_text[9] = ')';
+    gray_text[10] = '\0';
+
+    result &= ST7735S_DrawSignedTenth(40U, 24U, yaw_deg);
+    result &= ST7735S_DrawSignedTenth(40U, 48U, gyro_z_dps);
+    result &= ST7735S_FillRect(48U, 72U, 80U, 16U,
+        ST7735S_COLOR_BLACK);
+    result &= ST7735S_DrawString(48U, 72U, gray_text,
+        ST7735S_COLOR_WHITE, ST7735S_COLOR_BLACK);
+    result &= ST7735S_FillRect(48U, 96U, 80U, 16U,
+        ST7735S_COLOR_BLACK);
+    result &= ST7735S_DrawString(48U, 96U, state,
+        ST7735S_COLOR_GREEN, ST7735S_COLOR_BLACK);
+    return result;
+}
+
 /* 该函数返回当前显示方向下的有效屏幕宽度。 */
 uint16_t ST7735S_GetWidth(void)
 {

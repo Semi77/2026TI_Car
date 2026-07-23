@@ -1,2 +1,9 @@
+#ifndef ADC_H
+#define ADC_H
+
 #include "ti_msp_dl_config.h"
-unsigned int adc_getValue(void);//读取ADC的数据
+
+/* 该函数启动一次ADC转换并返回本次12位采样结果。 */
+unsigned int adc_getValue(void);
+
+#endif

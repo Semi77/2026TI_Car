@@ -10,8 +10,11 @@
 #define UART_GYRO_FRAME_HEADER        (0x5AU)
 #define UART_GYRO_TYPE_GYRO_Z         (0xAAU)
 #define UART_GYRO_TYPE_YAW            (0xBBU)
+#define UART_GYRO_TYPE_STATUS         (0xCCU)
+#define UART_GYRO_BIAS_STATUS_OK      (0x96U)
 #define UART_GYRO_GYRO_SCALE_DPS      (2000.0f)
 #define UART_GYRO_YAW_SCALE_DEG       (180.0f)
+#define UART_GYRO_STATUS_WAIT_MS      (500U)
 
 static uint8_t s_rx_buffer[UART_GYRO_FRAME_SIZE];
 static uint8_t s_rx_count;
@@ -19,6 +22,8 @@ static volatile int16_t s_raw_gyro_z;
 static volatile int16_t s_raw_yaw;
 static volatile bool s_gyro_z_updated;
 static volatile bool s_yaw_updated;
+static volatile bool s_bias_status_received;
+static volatile bool s_bias_calibration_ok;
 
 static const uint8_t s_unlock_command[5] = {
     0x55U, 0xAAU, 0x13U, 0x8EU, 0x5FU
@@ -28,6 +33,9 @@ static const uint8_t s_yaw_zero_command[5] = {
 };
 static const uint8_t s_bias_calibration_command[5] = {
     0x55U, 0xAAU, 0x0AU, 0x01U, 0x00U
+};
+static const uint8_t s_bias_status_command[5] = {
+    0x55U, 0xAAU, 0x04U, 0x0AU, 0x00U
 };
 static const uint8_t s_save_command[5] = {
     0x55U, 0xAAU, 0x00U, 0x00U, 0x00U
@@ -63,6 +71,14 @@ static void UARTGyro_ParseFrame(void)
         s_rx_buffer[2] + s_rx_buffer[3]);
     int16_t raw_value;
 
+    if (s_rx_buffer[1] == UART_GYRO_TYPE_STATUS) {
+        s_bias_status_received = true;
+        s_bias_calibration_ok = (s_rx_buffer[2] == 0x00U) &&
+            (s_rx_buffer[3] == 0x00U) &&
+            ((s_rx_buffer[4] == UART_GYRO_BIAS_STATUS_OK) ||
+             (s_rx_buffer[4] == checksum));
+        return;
+    }
     if (checksum != s_rx_buffer[4]) {
         return;
     }
@@ -90,7 +106,8 @@ static void UARTGyro_ReceiveByte(uint8_t data)
 
     if (s_rx_count == 1U) {
         if ((data != UART_GYRO_TYPE_GYRO_Z) &&
-            (data != UART_GYRO_TYPE_YAW)) {
+            (data != UART_GYRO_TYPE_YAW) &&
+            (data != UART_GYRO_TYPE_STATUS)) {
             s_rx_count = 0U;
             if (data == UART_GYRO_FRAME_HEADER) {
                 s_rx_buffer[s_rx_count++] = data;
@@ -114,6 +131,8 @@ void UARTGyro_Init(void)
     s_raw_yaw = 0;
     s_gyro_z_updated = false;
     s_yaw_updated = false;
+    s_bias_status_received = false;
+    s_bias_calibration_ok = false;
 
     while (!DL_UART_Main_isRXFIFOEmpty(UART_GYRO_INST)) {
         (void)DL_UART_Main_receiveData(UART_GYRO_INST);
@@ -185,16 +204,28 @@ void UARTGyro_ResetYaw(void)
     UARTGyro_SendBytes(s_save_command, sizeof(s_save_command));
 }
 
-/* 该函数发送命令执行模块零偏校准并在完成后保存。 */
-void UARTGyro_CalibrateBias(void)
+/* 该函数执行零偏校准、读取校准状态并返回是否成功。 */
+bool UARTGyro_CalibrateBias(void)
 {
+    uint32_t wait_ms;
+
+    s_bias_status_received = false;
+    s_bias_calibration_ok = false;
     UARTGyro_SendBytes(s_unlock_command, sizeof(s_unlock_command));
     delay_ms(100U);
     UARTGyro_SendBytes(s_bias_calibration_command,
         sizeof(s_bias_calibration_command));
-    delay_ms(5000U);
-    // delay_ms 20000U
+    delay_ms(20000U);
+    UARTGyro_SendBytes(s_bias_status_command,
+        sizeof(s_bias_status_command));
+    for (wait_ms = 0U; wait_ms < UART_GYRO_STATUS_WAIT_MS; wait_ms += 10U) {
+        if (s_bias_status_received) {
+            break;
+        }
+        delay_ms(10U);
+    }
     UARTGyro_SendBytes(s_save_command, sizeof(s_save_command));
+    return s_bias_status_received && s_bias_calibration_ok;
 }
 
 /* 该函数处理UART_GYRO接收中断并读取FIFO中的全部字节。 */

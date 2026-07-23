@@ -14,7 +14,7 @@ void Get_Analog_value(unsigned short *result)
         Switch_Address_0(!(i&0x01));  // 地址线0，对应bit0
         Switch_Address_1(!(i&0x02));  // 地址线1，对应bit1
         Switch_Address_2(!(i&0x04));  // 地址线2，对应bit2
-				delay_us(1);//等待响应
+				delay_us(10);//等待模拟多路选择器和输出电压稳定
         // 每个通道采集8次ADC值进行均值滤波
         for(j=0;j<8;j++)
         {
